@@ -1,5 +1,8 @@
 import SwiftUI
 import WidgetKit
+#if PROMO_RENDER
+import AppKit
+#endif
 
 private enum CodexWidgetMode: String {
     case overview
@@ -51,7 +54,6 @@ private struct CodexWidgetView: View {
     var body: some View {
         content
             .containerBackground(.fill.tertiary, for: .widget)
-            .widgetURL(URL(string: "codexpulse://details"))
     }
 
     @ViewBuilder
@@ -839,6 +841,279 @@ private struct CodexTasksWidget: Widget {
     }
 }
 
+#if PROMO_RENDER
+private struct PromoChip: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.88))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(.white.opacity(0.09))
+                    .overlay(
+                        Capsule()
+                            .stroke(.white.opacity(0.13), lineWidth: 1)
+                    )
+            )
+    }
+}
+
+private struct PromoWidgetShell<Content: View>: View {
+    let width: CGFloat
+    let height: CGFloat
+    @ViewBuilder let content: Content
+
+    init(
+        width: CGFloat,
+        height: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.width = width
+        self.height = height
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(18)
+            .frame(width: width, height: height)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(Color(red: 0.105, green: 0.115, blue: 0.145))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(.white.opacity(0.11), lineWidth: 1)
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .shadow(color: .black.opacity(0.30), radius: 28, y: 18)
+    }
+}
+
+private struct ReadmeHeroCanvas: View {
+    let snapshot: WidgetSnapshotV1
+    let appIcon: NSImage
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.025, green: 0.055, blue: 0.115),
+                    Color(red: 0.035, green: 0.110, blue: 0.145),
+                    Color(red: 0.020, green: 0.080, blue: 0.105),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [
+                    Color(red: 0.20, green: 0.95, blue: 0.68).opacity(0.26),
+                    .clear,
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 360
+            )
+            .frame(width: 720, height: 720)
+            .offset(x: 410, y: -240)
+
+            RadialGradient(
+                colors: [
+                    Color(red: 0.08, green: 0.70, blue: 0.98).opacity(0.18),
+                    .clear,
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 280
+            )
+            .frame(width: 560, height: 560)
+            .offset(x: -420, y: 300)
+
+            HStack(spacing: 28) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 16) {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: 76, height: 76)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .shadow(color: .black.opacity(0.25), radius: 18, y: 10)
+
+                        Text("Codex Pulse")
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                    }
+
+                    Text("Know what’s left.\nSee what’s running.\nStay in flow.")
+                        .font(.system(size: 29, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineSpacing(4)
+                        .padding(.top, 34)
+
+                    Text("Quota, tokens, and active tasks —\nright on your Mac desktop.")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.66))
+                        .lineSpacing(5)
+                        .padding(.top, 18)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 10) {
+                            PromoChip(
+                                title: "Native WidgetKit",
+                                systemImage: "macwindow"
+                            )
+                            PromoChip(
+                                title: "Local only",
+                                systemImage: "lock.fill"
+                            )
+                        }
+                        HStack(spacing: 10) {
+                            PromoChip(
+                                title: "No telemetry",
+                                systemImage: "shield.checkered"
+                            )
+                            PromoChip(
+                                title: "macOS 14+",
+                                systemImage: "apple.logo"
+                            )
+                        }
+                    }
+                    .padding(.top, 34)
+                }
+                .frame(width: 345, alignment: .leading)
+
+                ZStack {
+                    PromoWidgetShell(width: 476, height: 216) {
+                        MediumOverviewView(snapshot: snapshot, accent: .green)
+                    }
+                    .rotationEffect(.degrees(-1.2))
+                    .offset(x: -64, y: -126)
+
+                    PromoWidgetShell(width: 206, height: 206) {
+                        SmallTokensView(snapshot: snapshot, accent: .green)
+                    }
+                    .rotationEffect(.degrees(-2.0))
+                    .offset(x: -206, y: 128)
+
+                    PromoWidgetShell(width: 472, height: 218) {
+                        TaskListView(
+                            snapshot: snapshot,
+                            accent: .green,
+                            rowLimit: 2
+                        )
+                    }
+                    .rotationEffect(.degrees(1.3))
+                    .offset(x: 142, y: 118)
+                }
+                .frame(width: 747, height: 520)
+            }
+            .padding(.horizontal, 40)
+        }
+        .frame(width: 1200, height: 600)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+@main
+struct ReadmeHeroRenderer {
+    @MainActor
+    static func main() throws {
+        let outputPath = CommandLine.arguments.dropFirst().first
+            ?? "Assets/codex-pulse-hero.png"
+        let appIconPath = "Resources/AppIcon-1024.png"
+
+        guard let appIcon = NSImage(contentsOfFile: appIconPath) else {
+            throw NSError(
+                domain: "CodexPulse.ReadmeHero",
+                code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Could not load \(appIconPath). Run from the repository root.",
+                ]
+            )
+        }
+
+        let now = Date()
+        let snapshot = WidgetSnapshotV1(
+            generatedAt: now,
+            planType: "demo",
+            primaryUsedPercent: 38,
+            primaryResetsAt: now.addingTimeInterval(5.2 * 24 * 60 * 60),
+            secondaryUsedPercent: 24,
+            secondaryResetsAt: now.addingTimeInterval(12.5 * 24 * 60 * 60),
+            hasCredits: false,
+            unlimitedCredits: false,
+            creditBalance: nil,
+            todayCreatedTaskTokens: 8_400_000,
+            lifetimeTokens: 2_460_000_000,
+            peakDailyTokens: 312_000_000,
+            activeTasks: [
+                WidgetTaskSnapshot(
+                    id: "demo-index",
+                    title: "索引示例工作区",
+                    agent: "演示任务",
+                    model: "Codex",
+                    tokensUsed: 860_000,
+                    startedAt: now.addingTimeInterval(-12 * 60),
+                    updatedAt: now
+                ),
+                WidgetTaskSnapshot(
+                    id: "demo-tests",
+                    title: "运行演示测试",
+                    agent: "演示任务",
+                    model: "Codex",
+                    tokensUsed: 248_000,
+                    startedAt: now.addingTimeInterval(-4 * 60),
+                    updatedAt: now
+                ),
+            ],
+            recentTaskCount: 18,
+            modelName: "Codex",
+            codexVersion: "demo",
+            error: nil
+        )
+
+        let renderer = ImageRenderer(
+            content: ReadmeHeroCanvas(snapshot: snapshot, appIcon: appIcon)
+        )
+        renderer.proposedSize = ProposedViewSize(width: 1200, height: 600)
+        renderer.scale = 2
+
+        guard let cgImage = renderer.cgImage else {
+            throw NSError(
+                domain: "CodexPulse.ReadmeHero",
+                code: 2,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Could not render the hero image.",
+                ]
+            )
+        }
+
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        guard let png = bitmap.representation(
+            using: .png,
+            properties: [.compressionFactor: 1]
+        ) else {
+            throw NSError(
+                domain: "CodexPulse.ReadmeHero",
+                code: 3,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Could not encode the hero PNG.",
+                ]
+            )
+        }
+
+        try png.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
+        print("Rendered \(cgImage.width)x\(cgImage.height) hero to \(outputPath)")
+    }
+}
+#else
 @main
 struct CodexPulseWidgetBundle: WidgetBundle {
     var body: some Widget {
@@ -848,3 +1123,4 @@ struct CodexPulseWidgetBundle: WidgetBundle {
         CodexTasksWidget()
     }
 }
+#endif

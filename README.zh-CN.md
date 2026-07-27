@@ -1,26 +1,48 @@
-# Codex Pulse
+<h1 align="center">Codex Pulse</h1>
 
-[English](README.md)
+<p align="center">
+  <strong>剩多少、跑什么，Mac 桌面一眼看清。</strong>
+</p>
 
-Codex Pulse 是一个原生 macOS WidgetKit 小组件，用来查看 Codex 的额度窗口、Token activity 和本地正在运行的任务。
+<p align="center">
+  原生 macOS 小组件，集中显示 Codex 额度、Token 活动和运行任务；本地优先，不打断工作流。
+</p>
 
-> 这是非官方社区项目，与 OpenAI 没有关联，也未获得 OpenAI 背书。
+<p align="center">
+  <a href="https://github.com/chifanjie/codex-pulse/releases/latest">
+    <img alt="最新版本" src="https://img.shields.io/github/v/release/chifanjie/codex-pulse?display_name=tag&amp;sort=semver&amp;label=release&amp;color=0A84FF">
+  </a>
+  <img alt="macOS 14 或更高版本" src="https://img.shields.io/badge/macOS-14%2B-111111?logo=apple&amp;logoColor=white">
+  <img alt="Apple Silicon arm64" src="https://img.shields.io/badge/Apple%20Silicon-arm64-111111?logo=apple&amp;logoColor=white">
+  <img alt="无遥测" src="https://img.shields.io/badge/telemetry-none-34C759">
+  <a href="LICENSE">
+    <img alt="MIT 许可证" src="https://img.shields.io/badge/license-MIT-34C759">
+  </a>
+</p>
 
-![使用演示数据渲染的 Codex Pulse 中号总览小组件](Assets/codex-pulse-demo.jpg)
+<p align="center">
+  <a href="https://github.com/chifanjie/codex-pulse/releases/latest"><strong>下载最新版</strong></a>
+  · <a href="#从源码构建">从源码构建</a>
+  · <a href="README.md">English</a>
+</p>
 
-_预览图完全使用合成演示数据，不包含任何用户账户信息。_
+<p align="center">
+  <sub>非官方社区项目，与 OpenAI 无关联，也未获得 OpenAI 背书。</sub>
+</p>
 
-## 主要特点
+<p align="center">
+  <img src="Assets/codex-pulse-hero.png" width="1200" alt="使用合成演示数据展示 Codex Pulse 总览、Token 和任务原生小组件">
+</p>
 
-- 真正的 WidgetKit 扩展，可在 macOS 系统小组件图库中选择。
-- 提供总览、额度、Token、任务四种小组件。
-- 支持系统小、中、大尺寸。
-- 使用系统字体、SF Symbols、语义颜色和系统管理的位置。
-- 只读访问本地 Codex 数据。
-- 菜单栏提供手动刷新和可选的详细面板。
-- 不含统计 SDK、广告或项目自有云服务。
+<p align="center">
+  <sub>使用真实 SwiftUI 与 WidgetKit 视图，以合成演示数据按 Retina 分辨率渲染。</sub>
+</p>
 
-## 小组件类型
+| **原生 WidgetKit** | **关键信息一眼可见** | **本地优先设计** |
+| --- | --- | --- |
+| 从 macOS 小组件图库添加，像系统小组件一样选择尺寸和位置。 | 无需切换窗口，即可查看额度、Token 活动和运行任务。 | 只读访问，不含统计 SDK、广告或项目自有云服务。 |
+
+## 按需要选择视图
 
 | 类型 | 小 | 中 | 大 | 显示内容 |
 | --- | :---: | :---: | :---: | --- |

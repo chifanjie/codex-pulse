@@ -1,26 +1,48 @@
-# Codex Pulse
+<h1 align="center">Codex Pulse</h1>
 
-[简体中文](README.zh-CN.md)
+<p align="center">
+  <strong>Know what’s left. See what’s running. Stay in flow.</strong>
+</p>
 
-Codex Pulse is a native macOS WidgetKit dashboard for monitoring Codex quota windows, token activity, and locally active tasks.
+<p align="center">
+  Native macOS widgets for Codex quota, token activity, and active tasks — local-first, right on your desktop.
+</p>
 
-> Unofficial community project. Codex Pulse is not affiliated with or endorsed by OpenAI.
+<p align="center">
+  <a href="https://github.com/chifanjie/codex-pulse/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/chifanjie/codex-pulse?display_name=tag&amp;sort=semver&amp;label=release&amp;color=0A84FF">
+  </a>
+  <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-111111?logo=apple&amp;logoColor=white">
+  <img alt="Apple Silicon arm64" src="https://img.shields.io/badge/Apple%20Silicon-arm64-111111?logo=apple&amp;logoColor=white">
+  <img alt="No telemetry" src="https://img.shields.io/badge/telemetry-none-34C759">
+  <a href="LICENSE">
+    <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-34C759">
+  </a>
+</p>
 
-![Codex Pulse medium overview widget rendered with demo data](Assets/codex-pulse-demo.jpg)
+<p align="center">
+  <a href="https://github.com/chifanjie/codex-pulse/releases/latest"><strong>Download latest release</strong></a>
+  · <a href="#build-from-source">Build from source</a>
+  · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-_The preview uses synthetic demo data and contains no user account information._
+<p align="center">
+  <sub>Unofficial community project. Not affiliated with or endorsed by OpenAI.</sub>
+</p>
 
-## Highlights
+<p align="center">
+  <img src="Assets/codex-pulse-hero.png" width="1200" alt="Codex Pulse showing native Overview, Token, and Tasks widgets with synthetic demo data">
+</p>
 
-- A real WidgetKit extension that appears in the macOS widget gallery.
-- Four selectable widgets: Overview, Quota, Token, and Tasks.
-- Native small, medium, and large system families.
-- System typography, SF Symbols, semantic colors, and system-managed placement.
-- Read-only access to local Codex data.
-- A menu bar companion with manual refresh and an optional detail panel.
-- No analytics, advertising, or project-owned cloud service.
+<p align="center">
+  <sub>Rendered at Retina resolution from the real SwiftUI and WidgetKit views using synthetic demo data.</sub>
+</p>
 
-## Widget choices
+| **Native WidgetKit** | **Everything at a glance** | **Local-first by design** |
+| --- | --- | --- |
+| Add it from the macOS widget gallery and place it like any system widget. | See quota remaining, token activity, and active tasks without switching windows. | Read-only access, no analytics, no ads, and no project-owned cloud service. |
+
+## Pick the view you need
 
 | Widget | Small | Medium | Large | Content |
 | --- | :---: | :---: | :---: | --- |
