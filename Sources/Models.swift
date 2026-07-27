@@ -20,7 +20,10 @@ struct AccountMetrics: Equatable {
     var lifetimeTokens: Int64?
     var peakDailyTokens: Int64?
     var longestRunningTurnSeconds: Int64?
+    var usageThroughDate: String?
     var lastFetchedAt: Date?
+    var rateLimitsFetchedAt: Date?
+    var usageFetchedAt: Date?
     var rateLimitsLoaded = false
     var usageLoaded = false
 }

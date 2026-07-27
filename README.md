@@ -48,8 +48,8 @@
 | --- | :---: | :---: | :---: | --- |
 | Codex Overview | ✓ | ✓ | ✓ | Quota remaining, active tasks, daily/lifetime/peak tokens |
 | Codex Quota | ✓ | ✓ | ✓ | Primary and secondary windows, reset time, credits |
-| Codex Token | ✓ | ✓ | ✓ | Tokens from today's created tasks, lifetime total, peak day |
-| Codex Tasks | — | ✓ | ✓ | Task title, model, runtime, and token count |
+| Codex Token | ✓ | ✓ | ✓ | Local tokens used today, account lifetime total, peak day |
+| Codex Tasks | — | ✓ | ✓ | Task title, model, runtime, and current-turn tokens |
 
 ## Requirements
 
@@ -111,7 +111,7 @@ The build script:
 4. Search for **Codex Pulse**.
 5. Choose a widget and size, then drag it onto the desktop.
 
-The medium Overview widget is the recommended starting point. Clicking a widget opens the detail panel.
+The medium Overview widget is the recommended starting point. Use the menu bar companion to refresh data or open the widget setup instructions.
 
 ## Data sources
 
@@ -120,8 +120,8 @@ Codex Pulse reads:
 | Source | Purpose | Access |
 | --- | --- | --- |
 | Local Codex App Server | Plan, rate-limit windows, credits, token activity | Read-only RPC |
-| `~/.codex/state_5.sqlite` | Local task metadata and token totals | Read-only SQLite |
-| `~/.codex/sessions/**/*.jsonl` | Recent task start/stop markers | Read-only file scan |
+| `~/.codex/state_5.sqlite` | Local task metadata | Read-only SQLite |
+| `~/.codex/sessions/**/*.jsonl` | Task state and deduplicated token deltas | Read-only file scan |
 
 The host publishes a compact snapshot to:
 
@@ -136,7 +136,8 @@ See [PRIVACY.md](PRIVACY.md) for the complete data-handling statement.
 ## Refresh behavior
 
 - Local task data is polled approximately every 5 seconds.
-- Account data is requested approximately every 3 minutes.
+- Account data is requested approximately every minute after a successful read,
+  with bounded retry backoff after failures.
 - An unchanged snapshot receives a low-frequency heartbeat.
 - WidgetKit decides the final timeline refresh schedule, so widgets are not guaranteed to update every few seconds.
 
@@ -145,8 +146,10 @@ See [PRIVACY.md](PRIVACY.md) for the complete data-handling statement.
 ## Known limitations
 
 - Codex App Server responses and local database schemas are not stable public integration contracts and may change.
-- Active-task state is inferred from local events and recent activity.
-- Account token activity may be delayed.
+- Active-task state is inferred from local start/stop events.
+- Account token activity may be delayed; when available, the widget shows the
+  latest upstream statistics date. “Local today” is calculated independently
+  from local session events.
 - Task widgets can display task titles. Remove them before screen sharing if titles are sensitive.
 - Only Apple Silicon is currently built and tested.
 

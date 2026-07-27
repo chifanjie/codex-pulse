@@ -205,9 +205,9 @@ private struct SmallQuotaView: View {
     }
 
     private var activeLabel: String {
-        snapshot.activeTasks.isEmpty
+        snapshot.effectiveActiveTaskCount == 0
             ? "空闲"
-            : "\(snapshot.activeTasks.count) 运行中"
+            : "\(snapshot.effectiveActiveTaskCount) 运行中"
     }
 }
 
@@ -229,14 +229,14 @@ private struct SmallTokensView: View {
                 .minimumScaleFactor(0.62)
                 .lineLimit(1)
                 .foregroundStyle(.primary)
-            Text("累计 Token Activity")
+            Text("账户累计 Token Activity")
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("今日创建")
+                    Text("本机今日")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(WidgetNumber.compact(snapshot.todayCreatedTaskTokens))
@@ -287,9 +287,13 @@ private struct MediumOverviewView: View {
                 Spacer(minLength: 4)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(snapshot.activeTasks.count)")
+                    Text("\(snapshot.effectiveActiveTaskCount)")
                         .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    Text(snapshot.activeTasks.isEmpty ? "当前空闲" : "任务运行中")
+                    Text(
+                        snapshot.effectiveActiveTaskCount == 0
+                            ? "当前空闲"
+                            : "任务运行中"
+                    )
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
@@ -299,15 +303,15 @@ private struct MediumOverviewView: View {
 
             HStack(spacing: 10) {
                 MetricCell(
-                    title: "今日创建",
+                    title: "本机今日",
                     value: WidgetNumber.compact(snapshot.todayCreatedTaskTokens)
                 )
                 MetricCell(
-                    title: "累计",
+                    title: "账户累计",
                     value: WidgetNumber.compact(snapshot.lifetimeTokens)
                 )
                 MetricCell(
-                    title: "峰值单日",
+                    title: "账户峰值",
                     value: WidgetNumber.compact(snapshot.peakDailyTokens)
                 )
             }
@@ -374,7 +378,7 @@ private struct MediumTokensView: View {
         VStack(spacing: 10) {
             WidgetHeader(
                 snapshot: snapshot,
-                trailingText: "Token Activity",
+                trailingText: usageStatus,
                 accent: accent
             )
 
@@ -382,7 +386,7 @@ private struct MediumTokensView: View {
 
             HStack(spacing: 12) {
                 MetricCell(
-                    title: "今日创建任务",
+                    title: "今日本机 Token",
                     value: WidgetNumber.compact(snapshot.todayCreatedTaskTokens),
                     prominent: true
                 )
@@ -394,7 +398,7 @@ private struct MediumTokensView: View {
                 )
                 Divider()
                 MetricCell(
-                    title: "峰值单日",
+                    title: "账户峰值",
                     value: WidgetNumber.compact(snapshot.peakDailyTokens),
                     prominent: true
                 )
@@ -403,6 +407,11 @@ private struct MediumTokensView: View {
             Spacer(minLength: 0)
             StatusLine(snapshot: snapshot)
         }
+    }
+
+    private var usageStatus: String {
+        snapshot.accountUsageThroughDate.map { "账户截至 \($0)" }
+            ?? "账户统计可能延迟"
     }
 }
 
@@ -440,9 +449,13 @@ private struct LargeOverviewView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(snapshot.activeTasks.count)")
+                    Text("\(snapshot.effectiveActiveTaskCount)")
                         .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    Text(snapshot.activeTasks.isEmpty ? "当前空闲" : "任务运行中")
+                    Text(
+                        snapshot.effectiveActiveTaskCount == 0
+                            ? "当前空闲"
+                            : "任务运行中"
+                    )
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
@@ -452,7 +465,7 @@ private struct LargeOverviewView: View {
 
             HStack(spacing: 12) {
                 MetricCell(
-                    title: "今日创建任务",
+                    title: "今日本机 Token",
                     value: WidgetNumber.compact(snapshot.todayCreatedTaskTokens),
                     prominent: true
                 )
@@ -462,7 +475,7 @@ private struct LargeOverviewView: View {
                     prominent: true
                 )
                 MetricCell(
-                    title: "峰值单日",
+                    title: "账户峰值",
                     value: WidgetNumber.compact(snapshot.peakDailyTokens),
                     prominent: true
                 )
@@ -571,7 +584,7 @@ private struct LargeTokensView: View {
         VStack(alignment: .leading, spacing: 13) {
             WidgetHeader(
                 snapshot: snapshot,
-                trailingText: "统计可能延迟",
+                trailingText: usageStatus,
                 accent: accent
             )
 
@@ -587,12 +600,12 @@ private struct LargeTokensView: View {
 
             HStack(spacing: 12) {
                 MetricCell(
-                    title: "今日创建任务累计",
+                    title: "今日本机 Token",
                     value: WidgetNumber.compact(snapshot.todayCreatedTaskTokens),
                     prominent: true
                 )
                 MetricCell(
-                    title: "峰值单日",
+                    title: "账户峰值",
                     value: WidgetNumber.compact(snapshot.peakDailyTokens),
                     prominent: true
                 )
@@ -606,6 +619,11 @@ private struct LargeTokensView: View {
             Spacer()
             StatusLine(snapshot: snapshot)
         }
+    }
+
+    private var usageStatus: String {
+        snapshot.accountUsageThroughDate.map { "账户统计截至 \($0)" }
+            ?? "账户统计可能延迟"
     }
 }
 
@@ -623,9 +641,13 @@ private struct TaskListView: View {
             )
 
             HStack(alignment: .firstTextBaseline) {
-                Text("\(snapshot.activeTasks.count)")
+                Text("\(snapshot.effectiveActiveTaskCount)")
                     .font(.system(size: 28, weight: .semibold, design: .rounded))
-                Text(snapshot.activeTasks.isEmpty ? "当前空闲" : "个任务运行中")
+                Text(
+                    snapshot.effectiveActiveTaskCount == 0
+                        ? "当前空闲"
+                        : "个任务运行中"
+                )
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -750,7 +772,7 @@ private struct StatusLine: View {
         if Date().timeIntervalSince(snapshot.generatedAt) > 30 * 60 {
             return "数据可能已过期"
         }
-        return "本地只读 · 已更新"
+        return "本机数据已更新"
     }
 }
 
@@ -823,7 +845,7 @@ private struct CodexTokensWidget: Widget {
             CodexWidgetView(entry: entry, mode: .tokens)
         }
         .configurationDisplayName("Codex Token")
-        .description("查看今日创建任务、累计与峰值 Token activity。")
+        .description("查看今日本机、账户累计与峰值 Token activity。")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -836,7 +858,7 @@ private struct CodexTasksWidget: Widget {
             CodexWidgetView(entry: entry, mode: .tasks)
         }
         .configurationDisplayName("Codex 任务")
-        .description("查看本机推断的运行任务与 Token。")
+        .description("查看本机推断的运行任务与当前轮次 Token。")
         .supportedFamilies([.systemMedium, .systemLarge])
     }
 }

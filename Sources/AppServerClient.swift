@@ -5,6 +5,8 @@ final class AppServerClient {
     struct QueryResult {
         let metrics: AccountMetrics
         let error: String?
+        let accountKey: Int?
+        let accountIdentityLoaded: Bool
     }
 
     private let codexExecutable: URL?
@@ -22,7 +24,12 @@ final class AppServerClient {
 
     func query(timeout: TimeInterval = 12) -> QueryResult {
         guard let codexExecutable else {
-            return QueryResult(metrics: AccountMetrics(), error: "未找到 Codex CLI")
+            return QueryResult(
+                metrics: AccountMetrics(),
+                error: "未找到 Codex CLI",
+                accountKey: nil,
+                accountIdentityLoaded: false
+            )
         }
 
         let process = Process()
@@ -75,7 +82,7 @@ final class AppServerClient {
                     "clientInfo": [
                         "name": "codex-usage-widget",
                         "title": "Codex Usage Widget",
-                        "version": "2.0.0",
+                        "version": "2.0.1",
                     ],
                     "capabilities": [
                         "experimentalApi": true,
@@ -83,27 +90,34 @@ final class AppServerClient {
                 ],
             ])
         } catch {
-            return QueryResult(metrics: AccountMetrics(), error: "无法启动 Codex 数据服务")
+            return QueryResult(
+                metrics: AccountMetrics(),
+                error: "无法启动 Codex 数据服务",
+                accountKey: nil,
+                accountIdentityLoaded: false
+            )
         }
 
-        let waitResult = collector.wait(timeout: timeout)
-
-        guard waitResult else {
-            return QueryResult(metrics: AccountMetrics(), error: "账户用量刷新超时")
-        }
-
+        let receivedAllResponses = collector.wait(timeout: timeout)
         let responses = collector.responses
         var metrics = AccountMetrics()
         var errors: [String] = []
+        var accountKey: Int?
+        var accountIdentityLoaded = false
+        let fetchedAt = Date()
 
         if let rateResponse = responses[2] {
             if let message = Self.errorMessage(from: rateResponse) {
                 errors.append(message)
             } else if !Self.applyRateLimits(from: rateResponse, to: &metrics) {
                 errors.append("额度数据格式不兼容")
+            } else {
+                metrics.rateLimitsFetchedAt = fetchedAt
             }
         } else {
-            errors.append("未收到额度数据")
+            errors.append(
+                receivedAllResponses ? "未收到额度数据" : "额度数据刷新未完成"
+            )
         }
 
         if let usageResponse = responses[3] {
@@ -111,17 +125,40 @@ final class AppServerClient {
                 errors.append(message)
             } else if !Self.applyUsage(from: usageResponse, to: &metrics) {
                 errors.append("Token activity 数据格式不兼容")
+            } else {
+                metrics.usageFetchedAt = fetchedAt
             }
         } else {
-            errors.append("未收到 token activity")
+            errors.append(
+                receivedAllResponses
+                    ? "未收到 token activity"
+                    : "Token activity 刷新未完成"
+            )
+        }
+
+        if let accountResponse = responses[4] {
+            if let message = Self.errorMessage(from: accountResponse) {
+                errors.append(message)
+            } else if let parsedKey = Self.accountKey(from: accountResponse) {
+                accountKey = parsedKey
+                accountIdentityLoaded = true
+            } else {
+                errors.append("账号身份数据格式不兼容")
+            }
+        } else {
+            errors.append(
+                receivedAllResponses ? "未收到账号身份" : "账号身份刷新未完成"
+            )
         }
 
         if metrics.rateLimitsLoaded || metrics.usageLoaded {
-            metrics.lastFetchedAt = Date()
+            metrics.lastFetchedAt = fetchedAt
         }
         return QueryResult(
             metrics: metrics,
-            error: errors.isEmpty ? nil : errors.joined(separator: "；")
+            error: errors.isEmpty ? nil : errors.joined(separator: "；"),
+            accountKey: accountKey,
+            accountIdentityLoaded: accountIdentityLoaded
         )
     }
 
@@ -131,13 +168,19 @@ final class AppServerClient {
     ) -> Bool {
         guard
             let result = response["result"] as? [String: Any],
-            let snapshot = result["rateLimits"] as? [String: Any],
-            let primary = parseWindow(snapshot["primary"]),
-            let credits = snapshot["credits"] as? [String: Any],
-            let hasCredits = credits["hasCredits"] as? Bool,
-            let unlimitedCredits = credits["unlimited"] as? Bool
+            let snapshot = result["rateLimits"] as? [String: Any]
         else {
             return false
+        }
+
+        let primary: UsageWindow
+        if snapshot["primary"] is NSNull || snapshot["primary"] == nil {
+            primary = UsageWindow()
+        } else {
+            guard let parsedPrimary = parseWindow(snapshot["primary"]) else {
+                return false
+            }
+            primary = parsedPrimary
         }
 
         let secondary: UsageWindow?
@@ -150,12 +193,32 @@ final class AppServerClient {
             secondary = parsedSecondary
         }
 
+        let hasCredits: Bool
+        let unlimitedCredits: Bool
+        let creditBalance: String?
+        if snapshot["credits"] is NSNull || snapshot["credits"] == nil {
+            hasCredits = false
+            unlimitedCredits = false
+            creditBalance = nil
+        } else {
+            guard
+                let credits = snapshot["credits"] as? [String: Any],
+                let parsedHasCredits = credits["hasCredits"] as? Bool,
+                let parsedUnlimitedCredits = credits["unlimited"] as? Bool
+            else {
+                return false
+            }
+            hasCredits = parsedHasCredits
+            unlimitedCredits = parsedUnlimitedCredits
+            creditBalance = credits["balance"] as? String
+        }
+
         metrics.planType = snapshot["planType"] as? String
         metrics.primary = primary
         metrics.secondary = secondary
         metrics.hasCredits = hasCredits
         metrics.unlimitedCredits = unlimitedCredits
-        metrics.creditBalance = credits["balance"] as? String
+        metrics.creditBalance = creditBalance
         metrics.rateLimitsLoaded = true
         return true
     }
@@ -171,21 +234,44 @@ final class AppServerClient {
             return false
         }
 
-        let lifetimeTokens = int64(summary["lifetimeTokens"])
-        let peakDailyTokens = int64(summary["peakDailyTokens"])
-        let longestRunningTurnSeconds = int64(summary["longestRunningTurnSec"])
-        guard lifetimeTokens != nil
-                || peakDailyTokens != nil
-                || longestRunningTurnSeconds != nil
-        else {
-            return false
+        metrics.lifetimeTokens = int64(summary["lifetimeTokens"])
+        metrics.peakDailyTokens = int64(summary["peakDailyTokens"])
+        metrics.longestRunningTurnSeconds = int64(summary["longestRunningTurnSec"])
+        if let buckets = result["dailyUsageBuckets"] as? [[String: Any]] {
+            metrics.usageThroughDate = buckets
+                .compactMap { $0["startDate"] as? String }
+                .max()
+        } else {
+            metrics.usageThroughDate = nil
         }
-
-        metrics.lifetimeTokens = lifetimeTokens
-        metrics.peakDailyTokens = peakDailyTokens
-        metrics.longestRunningTurnSeconds = longestRunningTurnSeconds
         metrics.usageLoaded = true
         return true
+    }
+
+    private static func accountKey(from response: [String: Any]) -> Int? {
+        guard let result = response["result"] as? [String: Any] else {
+            return nil
+        }
+
+        var hasher = Hasher()
+        hasher.combine(result["requiresOpenaiAuth"] as? Bool ?? false)
+
+        if result["account"] is NSNull || result["account"] == nil {
+            hasher.combine("signed-out")
+            return hasher.finalize()
+        }
+
+        guard
+            let account = result["account"] as? [String: Any],
+            let type = account["type"] as? String
+        else {
+            return nil
+        }
+        hasher.combine(type)
+        hasher.combine(account["email"] as? String)
+        hasher.combine(account["planType"] as? String)
+        hasher.combine(account["usesCodexManagedCredentials"] as? Bool)
+        return hasher.finalize()
     }
 
     private static func parseWindow(_ value: Any?) -> UsageWindow? {
@@ -286,7 +372,9 @@ private final class ResponseCollector {
             if shouldInitialize {
                 didSendReadRequests = true
             }
-            let complete = storedResponses[2] != nil && storedResponses[3] != nil
+            let complete = storedResponses[2] != nil
+                && storedResponses[3] != nil
+                && storedResponses[4] != nil
             lock.unlock()
 
             if shouldInitialize {
@@ -301,6 +389,13 @@ private final class ResponseCollector {
                         "id": 3,
                         "method": "account/usage/read",
                         "params": NSNull(),
+                    ])
+                    try send([
+                        "id": 4,
+                        "method": "account/read",
+                        "params": [
+                            "refreshToken": false,
+                        ],
                     ])
                 } catch {
                     signal()
@@ -319,7 +414,10 @@ private final class ResponseCollector {
 
     func wait(timeout: TimeInterval) -> Bool {
         let result = semaphore.wait(timeout: .now() + timeout)
-        return result == .success && responses[2] != nil && responses[3] != nil
+        return result == .success
+            && responses[2] != nil
+            && responses[3] != nil
+            && responses[4] != nil
     }
 
     private func signal() {

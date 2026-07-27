@@ -6,6 +6,11 @@ final class WidgetSnapshotWriter {
     private var lastWriteAt: Date?
     private var lastReloadAt: Date?
     private var hasPendingReload = false
+    private var pendingReloadWorkItem: DispatchWorkItem?
+
+    deinit {
+        pendingReloadWorkItem?.cancel()
+    }
 
     func publish(_ dashboard: DashboardSnapshot) {
         let now = Date()
@@ -26,6 +31,7 @@ final class WidgetSnapshotWriter {
             todayCreatedTaskTokens: dashboard.local.todayTokens,
             lifetimeTokens: dashboard.account.lifetimeTokens,
             peakDailyTokens: dashboard.account.peakDailyTokens,
+            accountUsageThroughDate: dashboard.account.usageThroughDate,
             activeTasks: dashboard.local.activeTasks.prefix(6).map {
                 WidgetTaskSnapshot(
                     id: $0.id,
@@ -37,6 +43,7 @@ final class WidgetSnapshotWriter {
                     updatedAt: $0.updatedAt
                 )
             },
+            activeTaskCount: dashboard.local.activeTasks.count,
             recentTaskCount: dashboard.local.recentTaskCount,
             modelName: dashboard.local.modelName,
             codexVersion: dashboard.local.codexVersion,
@@ -69,12 +76,39 @@ final class WidgetSnapshotWriter {
             }
         }
 
-        let canReload = lastReloadAt == nil
-            || now.timeIntervalSince(lastReloadAt!) >= 60
-        guard hasPendingReload, canReload else { return }
+        requestTimelineReload(at: now)
+    }
 
+    private func requestTimelineReload(at now: Date) {
+        guard hasPendingReload else { return }
+        let minimumInterval: TimeInterval = 15
+        let elapsed = lastReloadAt.map { now.timeIntervalSince($0) }
+            ?? minimumInterval
+
+        if elapsed >= minimumInterval {
+            pendingReloadWorkItem?.cancel()
+            pendingReloadWorkItem = nil
+            performTimelineReload()
+            return
+        }
+
+        guard pendingReloadWorkItem == nil else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingReloadWorkItem = nil
+            guard self.hasPendingReload else { return }
+            self.performTimelineReload()
+        }
+        pendingReloadWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + (minimumInterval - elapsed),
+            execute: workItem
+        )
+    }
+
+    private func performTimelineReload() {
         WidgetCenter.shared.reloadAllTimelines()
-        lastReloadAt = now
+        lastReloadAt = Date()
         hasPendingReload = false
     }
 }

@@ -35,7 +35,7 @@ Codex Pulse itself does not transmit data to a service controlled by this projec
 
 ## Screen sharing
 
-Task widgets and the detail panel may display task titles. Remove or hide them before recording or sharing the screen when those titles are sensitive.
+Task widgets may display task titles. Remove or hide them before recording or sharing the screen when those titles are sensitive.
 
 ## Diagnostics
 

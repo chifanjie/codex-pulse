@@ -48,8 +48,8 @@
 | --- | :---: | :---: | :---: | --- |
 | Codex 总览 | ✓ | ✓ | ✓ | 额度剩余、运行任务、今日/累计/峰值 Token |
 | Codex 额度 | ✓ | ✓ | ✓ | 主要和次级窗口、重置时间、Credits |
-| Codex Token | ✓ | ✓ | ✓ | 今日创建任务、账户累计、峰值单日 Token |
-| Codex 任务 | — | ✓ | ✓ | 任务标题、模型、运行时长和 Token 数 |
+| Codex Token | ✓ | ✓ | ✓ | 今日本机 Token、账户累计、峰值单日 Token |
+| Codex 任务 | — | ✓ | ✓ | 任务标题、模型、运行时长和当前轮次 Token |
 
 ## 系统要求
 
@@ -104,15 +104,15 @@ open "$HOME/Applications/Codex Pulse.app"
 4. 搜索 `Codex Pulse`。
 5. 选择类型和尺寸，拖到桌面。
 
-推荐先添加“中号 Codex 总览”。点击小组件会打开详细面板。
+推荐先添加“中号 Codex 总览”。需要刷新数据或查看添加指引时，可使用菜单栏入口。
 
 ## 数据来源
 
 | 来源 | 用途 | 访问方式 |
 | --- | --- | --- |
 | 本地 Codex App Server | 套餐、额度窗口、Credits、Token activity | 只读 RPC |
-| `~/.codex/state_5.sqlite` | 本地任务元数据和 Token 总量 | 只读 SQLite |
-| `~/.codex/sessions/**/*.jsonl` | 最近的任务开始与结束标记 | 只读文件扫描 |
+| `~/.codex/state_5.sqlite` | 本地任务元数据 | 只读 SQLite |
+| `~/.codex/sessions/**/*.jsonl` | 任务状态和去重后的 Token 增量 | 只读文件扫描 |
 
 宿主应用会将精简快照写入：
 
@@ -125,7 +125,7 @@ open "$HOME/Applications/Codex Pulse.app"
 ## 刷新机制
 
 - 本地任务数据大约每 5 秒轮询一次。
-- 账户数据大约每 3 分钟查询一次。
+- 账户数据成功读取后大约每分钟查询一次；失败时采用有上限的退避重试。
 - 数据没有变化时也会低频写入心跳。
 - 最终的小组件时间线刷新由 macOS WidgetKit 调度，不保证几秒一次。
 
@@ -134,8 +134,9 @@ open "$HOME/Applications/Codex Pulse.app"
 ## 已知限制
 
 - Codex App Server 返回格式和本地数据库结构并非稳定的公共集成协议，未来可能变化。
-- 任务运行状态来自本地事件和最近活动时间推断。
-- 账户 Token activity 可能有统计延迟。
+- 任务运行状态来自本地开始/结束事件推断。
+- 账户 Token activity 可能有统计延迟；可用时组件会显示上游统计截止日期。
+  “今日本机”则独立根据本地会话事件计算。
 - 任务小组件会显示任务标题；录屏或屏幕共享前请检查是否包含敏感内容。
 - 当前只构建和测试了 Apple Silicon。
 

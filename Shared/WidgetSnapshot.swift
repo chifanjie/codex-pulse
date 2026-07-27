@@ -25,7 +25,9 @@ struct WidgetSnapshotV1: Codable, Equatable, Sendable {
     var todayCreatedTaskTokens: Int64
     var lifetimeTokens: Int64?
     var peakDailyTokens: Int64?
+    var accountUsageThroughDate: String? = nil
     var activeTasks: [WidgetTaskSnapshot]
+    var activeTaskCount: Int? = nil
     var recentTaskCount: Int
     var modelName: String?
     var codexVersion: String?
@@ -37,6 +39,10 @@ struct WidgetSnapshotV1: Codable, Equatable, Sendable {
 
     var secondaryRemainingPercent: Int? {
         secondaryUsedPercent.map { max(0, min(100, 100 - $0)) }
+    }
+
+    var effectiveActiveTaskCount: Int {
+        activeTaskCount ?? activeTasks.count
     }
 
     static let preview = WidgetSnapshotV1(

@@ -37,9 +37,7 @@ mkdir -p \
   "$project_dir"/Shared/*.swift \
   "$project_dir"/Sources/*.swift \
   -framework AppKit \
-  -framework SwiftUI \
   -framework ServiceManagement \
-  -framework CoreGraphics \
   -framework WidgetKit \
   -lsqlite3 \
   -o "$executable_dir/CodexPulse"

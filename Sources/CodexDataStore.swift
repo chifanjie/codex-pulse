@@ -2,33 +2,44 @@ import Combine
 import Foundation
 
 final class CodexDataStore: ObservableObject {
-    @Published private(set) var snapshot: DashboardSnapshot
+    @Published private(set) var snapshot = DashboardSnapshot.empty
     @Published private(set) var isRefreshing = false
 
     var onSnapshotChanged: ((DashboardSnapshot) -> Void)?
 
     private let localProvider = LocalDataProvider()
     private let appServerClient = AppServerClient()
-    private let worker = DispatchQueue(label: "com.local.codex-usage-widget.refresh")
-    private var timer: Timer?
-    private var lastAccountFetch: Date?
-    private var pendingForcedRefresh = false
+    private let localWorker = DispatchQueue(
+        label: "com.local.codex-usage-widget.local-refresh"
+    )
+    private let accountWorker = DispatchQueue(
+        label: "com.local.codex-usage-widget.account-refresh"
+    )
 
-    init() {
-        let cachedAccount = Self.loadCachedAccount()
-        snapshot = DashboardSnapshot(
-            account: cachedAccount,
-            local: LocalMetrics(),
-            refreshedAt: Date(),
-            accountError: nil
-        )
-        lastAccountFetch = cachedAccount.lastFetchedAt
-    }
+    private let localRefreshInterval: TimeInterval = 5
+    private let accountRefreshInterval: TimeInterval = 60
+
+    private var timer: Timer?
+    private var localRefreshInFlight = false
+    private var accountRefreshInFlight = false
+    private var pendingLocalRefresh = false
+    private var pendingForcedAccountRefresh = false
+    private var nextAccountRefreshAt: Date?
+    private var accountFailureCount = 0
+    private var accountKey: Int?
+    private var hasCompletedInitialLocalRefresh = false
+    private var hasCompletedInitialAccountRefresh = false
 
     func start() {
-        refresh(forceAccount: true)
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            self?.refresh()
+        refreshLocal()
+        refreshAccount(force: true)
+
+        timer = Timer.scheduledTimer(
+            withTimeInterval: localRefreshInterval,
+            repeats: true
+        ) { [weak self] _ in
+            self?.refreshLocal()
+            self?.refreshAccount()
         }
         if let timer {
             RunLoop.main.add(timer, forMode: .common)
@@ -41,172 +52,183 @@ final class CodexDataStore: ObservableObject {
     }
 
     func manualRefresh() {
-        refresh(forceAccount: true)
+        refreshLocal()
+        refreshAccount(force: true)
     }
 
-    private func refresh(forceAccount: Bool = false) {
-        if isRefreshing {
-            pendingForcedRefresh = pendingForcedRefresh || forceAccount
+    private func refreshLocal() {
+        if localRefreshInFlight {
+            pendingLocalRefresh = true
             return
         }
 
-        isRefreshing = true
-        let currentAccount = snapshot.account
-        let shouldFetchAccount = forceAccount
-            || lastAccountFetch == nil
-            || Date().timeIntervalSince(lastAccountFetch!) >= 180
+        localRefreshInFlight = true
+        updateRefreshingState()
 
-        worker.async { [weak self] in
+        localWorker.async { [weak self] in
             guard let self else { return }
-
             let local = self.localProvider.read()
-            let accountResult = shouldFetchAccount ? self.appServerClient.query() : nil
 
             DispatchQueue.main.async {
                 var next = self.snapshot
                 if local.error == nil {
                     next.local = local
                 } else {
-                    next.local.error = local.error
+                    // A stale "running" task is worse than a brief unavailable state.
+                    // Keep the last counters, but clear activity until SQLite is readable.
+                    var fallback = next.local
+                    fallback.activeTasks = []
+                    fallback.error = local.error
+                    next.local = fallback
                 }
                 next.refreshedAt = Date()
 
-                if let accountResult {
-                    next.account = Self.merge(
-                        fresh: accountResult.metrics,
-                        fallback: currentAccount
-                    )
-                    next.accountError = accountResult.error
-                    self.lastAccountFetch = Date()
-                    Self.saveCachedAccount(next.account)
-                }
+                self.hasCompletedInitialLocalRefresh = true
+                self.commit(next)
+                self.localRefreshInFlight = false
+                self.updateRefreshingState()
 
-                self.snapshot = next
-                self.isRefreshing = false
-                self.onSnapshotChanged?(next)
-
-                if self.pendingForcedRefresh {
-                    self.pendingForcedRefresh = false
-                    self.refresh(forceAccount: true)
+                if self.pendingLocalRefresh {
+                    self.pendingLocalRefresh = false
+                    self.refreshLocal()
                 }
             }
         }
     }
 
-    private static func merge(
-        fresh: AccountMetrics,
-        fallback: AccountMetrics
-    ) -> AccountMetrics {
-        var result = fresh
-
-        if !fresh.rateLimitsLoaded {
-            result.planType = fallback.planType
-            result.primary = fallback.primary
-            result.secondary = fallback.secondary
-            result.hasCredits = fallback.hasCredits
-            result.unlimitedCredits = fallback.unlimitedCredits
-            result.creditBalance = fallback.creditBalance
-            result.rateLimitsLoaded = fallback.rateLimitsLoaded
+    private func refreshAccount(force: Bool = false) {
+        if accountRefreshInFlight {
+            pendingForcedAccountRefresh = pendingForcedAccountRefresh || force
+            return
         }
 
-        if !fresh.usageLoaded {
-            result.lifetimeTokens = fallback.lifetimeTokens
-            result.peakDailyTokens = fallback.peakDailyTokens
-            result.longestRunningTurnSeconds = fallback.longestRunningTurnSeconds
-            result.usageLoaded = fallback.usageLoaded
+        let requestDate = Date()
+        if !force, let nextAccountRefreshAt, requestDate < nextAccountRefreshAt {
+            return
         }
 
-        if result.lastFetchedAt == nil {
-            result.lastFetchedAt = fallback.lastFetchedAt
-        }
+        accountRefreshInFlight = true
+        updateRefreshingState()
 
-        return result
+        accountWorker.async { [weak self] in
+            guard let self else { return }
+            let result = self.appServerClient.query()
+
+            DispatchQueue.main.async {
+                var next = self.snapshot
+                var accountMergeBase = next.account
+
+                if result.accountIdentityLoaded,
+                   let newKey = result.accountKey {
+                    if let oldKey = self.accountKey, oldKey != newKey {
+                        accountMergeBase = AccountMetrics()
+                    }
+                    self.accountKey = newKey
+                } else {
+                    // Without an identity response, retaining a missing domain
+                    // could combine data from two accounts during a switch.
+                    accountMergeBase = AccountMetrics()
+                }
+
+                next.account = Self.merging(
+                    result.metrics,
+                    into: accountMergeBase
+                )
+                next.accountError = result.error
+                next.refreshedAt = Date()
+
+                let isComplete = result.accountIdentityLoaded
+                    && result.metrics.rateLimitsLoaded
+                    && result.metrics.usageLoaded
+                    && result.error == nil
+                self.scheduleNextAccountRefresh(
+                    after: result,
+                    complete: isComplete
+                )
+
+                self.hasCompletedInitialAccountRefresh = true
+                self.commit(next)
+                self.accountRefreshInFlight = false
+                self.updateRefreshingState()
+
+                if self.pendingForcedAccountRefresh {
+                    self.pendingForcedAccountRefresh = false
+                    self.refreshAccount(force: true)
+                }
+            }
+        }
     }
 
-    private static func loadCachedAccount() -> AccountMetrics {
-        let defaults = UserDefaults.standard
-        let resetValue = defaults.double(forKey: "account.primary.resetAt")
-        let secondaryResetValue = defaults.double(forKey: "account.secondary.resetAt")
-        let fetchedValue = defaults.double(forKey: "account.fetchedAt")
-
-        var account = AccountMetrics()
-        account.planType = defaults.string(forKey: "account.plan")
-        account.primary = UsageWindow(
-            usedPercent: Self.cachedInt("account.primary.usedPercent"),
-            windowDurationMinutes: Self.cachedInt("account.primary.minutes"),
-            resetsAt: resetValue > 0 ? Date(timeIntervalSince1970: resetValue) : nil
-        )
-        account.rateLimitsLoaded = account.primary.usedPercent != nil
-
-        if defaults.object(forKey: "account.secondary.usedPercent") != nil {
-            account.secondary = UsageWindow(
-                usedPercent: Self.cachedInt("account.secondary.usedPercent"),
-                windowDurationMinutes: Self.cachedInt("account.secondary.minutes"),
-                resetsAt: secondaryResetValue > 0
-                    ? Date(timeIntervalSince1970: secondaryResetValue)
-                    : nil
+    private func scheduleNextAccountRefresh(
+        after result: AppServerClient.QueryResult,
+        complete: Bool
+    ) {
+        if complete {
+            accountFailureCount = 0
+            nextAccountRefreshAt = Date().addingTimeInterval(
+                accountRefreshInterval
             )
+            return
         }
 
-        account.hasCredits = defaults.bool(forKey: "account.hasCredits")
-        account.unlimitedCredits = defaults.bool(forKey: "account.unlimitedCredits")
-        account.creditBalance = defaults.string(forKey: "account.creditBalance")
-        account.lifetimeTokens = Self.cachedInt64("account.lifetimeTokens")
-        account.peakDailyTokens = Self.cachedInt64("account.peakDailyTokens")
-        account.longestRunningTurnSeconds = Self.cachedInt64("account.longestRunningTurnSeconds")
-        account.usageLoaded = account.lifetimeTokens != nil || account.peakDailyTokens != nil
-        account.lastFetchedAt = fetchedValue > 0 ? Date(timeIntervalSince1970: fetchedValue) : nil
-        return account
-    }
-
-    private static func saveCachedAccount(_ account: AccountMetrics) {
-        let defaults = UserDefaults.standard
-        defaults.set(account.planType, forKey: "account.plan")
-        Self.setOptional(account.primary.usedPercent, forKey: "account.primary.usedPercent")
-        defaults.set(account.primary.windowDurationMinutes, forKey: "account.primary.minutes")
-        defaults.set(account.primary.resetsAt?.timeIntervalSince1970 ?? 0, forKey: "account.primary.resetAt")
-
-        if let secondary = account.secondary {
-            Self.setOptional(secondary.usedPercent, forKey: "account.secondary.usedPercent")
-            defaults.set(secondary.windowDurationMinutes, forKey: "account.secondary.minutes")
-            defaults.set(secondary.resetsAt?.timeIntervalSince1970 ?? 0, forKey: "account.secondary.resetAt")
+        accountFailureCount += 1
+        let hasPartialData = result.metrics.rateLimitsLoaded
+            || result.metrics.usageLoaded
+        let delay: TimeInterval
+        if hasPartialData {
+            delay = accountFailureCount == 1 ? 15 : 30
         } else {
-            defaults.removeObject(forKey: "account.secondary.usedPercent")
-            defaults.removeObject(forKey: "account.secondary.minutes")
-            defaults.removeObject(forKey: "account.secondary.resetAt")
+            let exponent = min(accountFailureCount - 1, 4)
+            delay = min(15 * pow(2, Double(exponent)), 180)
         }
-
-        defaults.set(account.hasCredits, forKey: "account.hasCredits")
-        defaults.set(account.unlimitedCredits, forKey: "account.unlimitedCredits")
-        defaults.set(account.creditBalance, forKey: "account.creditBalance")
-        defaults.set(account.lifetimeTokens, forKey: "account.lifetimeTokens")
-        defaults.set(account.peakDailyTokens, forKey: "account.peakDailyTokens")
-        defaults.set(
-            account.longestRunningTurnSeconds,
-            forKey: "account.longestRunningTurnSeconds"
-        )
-        defaults.set(account.lastFetchedAt?.timeIntervalSince1970 ?? 0, forKey: "account.fetchedAt")
+        nextAccountRefreshAt = Date().addingTimeInterval(delay)
     }
 
-    private static func cachedInt(_ key: String) -> Int? {
-        guard let number = UserDefaults.standard.object(forKey: key) as? NSNumber else {
-            return nil
+    private static func merging(
+        _ fresh: AccountMetrics,
+        into existing: AccountMetrics
+    ) -> AccountMetrics {
+        var merged = existing
+
+        if fresh.rateLimitsLoaded {
+            merged.planType = fresh.planType
+            merged.primary = fresh.primary
+            merged.secondary = fresh.secondary
+            merged.hasCredits = fresh.hasCredits
+            merged.unlimitedCredits = fresh.unlimitedCredits
+            merged.creditBalance = fresh.creditBalance
+            merged.rateLimitsLoaded = true
+            merged.rateLimitsFetchedAt = fresh.rateLimitsFetchedAt
         }
-        return number.intValue
+
+        if fresh.usageLoaded {
+            merged.lifetimeTokens = fresh.lifetimeTokens
+            merged.peakDailyTokens = fresh.peakDailyTokens
+            merged.longestRunningTurnSeconds = fresh.longestRunningTurnSeconds
+            merged.usageThroughDate = fresh.usageThroughDate
+            merged.usageLoaded = true
+            merged.usageFetchedAt = fresh.usageFetchedAt
+        }
+
+        merged.lastFetchedAt = [
+            merged.rateLimitsFetchedAt,
+            merged.usageFetchedAt,
+        ].compactMap { $0 }.max()
+        return merged
     }
 
-    private static func cachedInt64(_ key: String) -> Int64? {
-        guard let number = UserDefaults.standard.object(forKey: key) as? NSNumber else {
-            return nil
+    private func commit(_ next: DashboardSnapshot) {
+        snapshot = next
+        guard
+            hasCompletedInitialLocalRefresh,
+            hasCompletedInitialAccountRefresh
+        else {
+            return
         }
-        return number.int64Value
+        onSnapshotChanged?(next)
     }
 
-    private static func setOptional<T>(_ value: T?, forKey key: String) {
-        if let value {
-            UserDefaults.standard.set(value, forKey: key)
-        } else {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
+    private func updateRefreshingState() {
+        isRefreshing = localRefreshInFlight || accountRefreshInFlight
     }
 }
