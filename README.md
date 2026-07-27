@@ -46,7 +46,7 @@ The CLI lookup currently checks:
 
 ## Install a release build
 
-1. Download `Codex-Pulse.app.zip` from the latest GitHub release.
+1. Download `Codex-Pulse-2.0.0-macos-arm64.zip` from the latest GitHub release.
 2. Unzip it and move `Codex Pulse.app` into `~/Applications` or `/Applications`.
 3. Open the app once. It runs as a menu bar app without a Dock icon.
 4. If macOS blocks the locally signed build, use Finder's **Open** action or build from source.

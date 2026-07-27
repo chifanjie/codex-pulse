@@ -44,7 +44,7 @@ _预览图完全使用合成演示数据，不包含任何用户账户信息。_
 
 ## 安装发布版
 
-1. 从最新 GitHub Release 下载 `Codex-Pulse.app.zip`。
+1. 从最新 GitHub Release 下载 `Codex-Pulse-2.0.0-macos-arm64.zip`。
 2. 解压后，将 `Codex Pulse.app` 移到 `~/Applications` 或 `/Applications`。
 3. 运行一次应用。它不会显示 Dock 图标，只常驻菜单栏。
 4. 如果 macOS 阻止这个本地签名版本，请在 Finder 中使用“打开”，或改为从源码构建。
