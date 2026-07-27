@@ -1020,12 +1020,185 @@ private struct ReadmeHeroCanvas: View {
     }
 }
 
+private struct SocialPreviewCanvas: View {
+    let snapshot: WidgetSnapshotV1
+    let appIcon: NSImage
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.025, green: 0.055, blue: 0.115),
+                    Color(red: 0.030, green: 0.105, blue: 0.135),
+                    Color(red: 0.018, green: 0.070, blue: 0.095),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [
+                    Color(red: 0.20, green: 0.95, blue: 0.68).opacity(0.30),
+                    .clear,
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 340
+            )
+            .frame(width: 680, height: 680)
+            .offset(x: 470, y: -250)
+
+            RadialGradient(
+                colors: [
+                    Color(red: 0.08, green: 0.70, blue: 0.98).opacity(0.18),
+                    .clear,
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 270
+            )
+            .frame(width: 540, height: 540)
+            .offset(x: -520, y: 330)
+
+            HStack(spacing: 30) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 18) {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: 84, height: 84)
+                            .clipShape(
+                                RoundedRectangle(
+                                    cornerRadius: 20,
+                                    style: .continuous
+                                )
+                            )
+                            .shadow(
+                                color: .black.opacity(0.28),
+                                radius: 20,
+                                y: 12
+                            )
+
+                        Text("Codex Pulse")
+                            .font(
+                                .system(
+                                    size: 56,
+                                    weight: .bold,
+                                    design: .rounded
+                                )
+                            )
+                            .foregroundStyle(.white)
+                    }
+
+                    Text("Know what’s left.\nSee what’s running.")
+                        .font(
+                            .system(
+                                size: 48,
+                                weight: .bold,
+                                design: .rounded
+                            )
+                        )
+                        .foregroundStyle(.white)
+                        .lineSpacing(5)
+                        .padding(.top, 46)
+
+                    Text("Quota, tokens, and active tasks —\nright on your Mac desktop.")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.82))
+                        .lineSpacing(5)
+                        .padding(.top, 24)
+                }
+                .frame(width: 500, alignment: .leading)
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: 64, style: .continuous)
+                        .fill(.white.opacity(0.035))
+                        .frame(width: 594, height: 370)
+                        .blur(radius: 1)
+                        .rotationEffect(.degrees(2.5))
+                        .offset(x: 28, y: 24)
+
+                    PromoWidgetShell(width: 604, height: 276) {
+                        MediumOverviewView(snapshot: snapshot, accent: .green)
+                    }
+                    .rotationEffect(.degrees(-0.7))
+                }
+                .frame(width: 620, height: 500)
+            }
+            .padding(.horizontal, 64)
+        }
+        .frame(width: 1280, height: 640)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+private enum PromoRenderVariant {
+    case readmeHero
+    case socialPreview
+
+    var logicalSize: CGSize {
+        switch self {
+        case .readmeHero:
+            return CGSize(width: 1200, height: 600)
+        case .socialPreview:
+            return CGSize(width: 1280, height: 640)
+        }
+    }
+
+    var scale: CGFloat {
+        switch self {
+        case .readmeHero:
+            return 2
+        case .socialPreview:
+            return 1
+        }
+    }
+
+    var defaultOutputPath: String {
+        switch self {
+        case .readmeHero:
+            return "Assets/codex-pulse-hero.png"
+        case .socialPreview:
+            return "Assets/codex-pulse-social-preview.png"
+        }
+    }
+
+    var outputLabel: String {
+        switch self {
+        case .readmeHero:
+            return "README hero"
+        case .socialPreview:
+            return "social preview"
+        }
+    }
+}
+
+private struct PromoRenderRoot: View {
+    let variant: PromoRenderVariant
+    let snapshot: WidgetSnapshotV1
+    let appIcon: NSImage
+
+    @ViewBuilder
+    var body: some View {
+        switch variant {
+        case .readmeHero:
+            ReadmeHeroCanvas(snapshot: snapshot, appIcon: appIcon)
+        case .socialPreview:
+            SocialPreviewCanvas(snapshot: snapshot, appIcon: appIcon)
+        }
+    }
+}
+
 @main
 struct ReadmeHeroRenderer {
     @MainActor
     static func main() throws {
-        let outputPath = CommandLine.arguments.dropFirst().first
-            ?? "Assets/codex-pulse-hero.png"
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        let variant: PromoRenderVariant = arguments.contains("--social-preview")
+            ? .socialPreview
+            : .readmeHero
+        let outputPath = arguments.first { !$0.hasPrefix("--") }
+            ?? variant.defaultOutputPath
         let appIconPath = "Resources/AppIcon-1024.png"
 
         guard let appIcon = NSImage(contentsOfFile: appIconPath) else {
@@ -1080,10 +1253,17 @@ struct ReadmeHeroRenderer {
         )
 
         let renderer = ImageRenderer(
-            content: ReadmeHeroCanvas(snapshot: snapshot, appIcon: appIcon)
+            content: PromoRenderRoot(
+                variant: variant,
+                snapshot: snapshot,
+                appIcon: appIcon
+            )
         )
-        renderer.proposedSize = ProposedViewSize(width: 1200, height: 600)
-        renderer.scale = 2
+        renderer.proposedSize = ProposedViewSize(
+            width: variant.logicalSize.width,
+            height: variant.logicalSize.height
+        )
+        renderer.scale = variant.scale
 
         guard let cgImage = renderer.cgImage else {
             throw NSError(
@@ -1110,7 +1290,10 @@ struct ReadmeHeroRenderer {
         }
 
         try png.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
-        print("Rendered \(cgImage.width)x\(cgImage.height) hero to \(outputPath)")
+        print(
+            "Rendered \(cgImage.width)x\(cgImage.height) "
+                + "\(variant.outputLabel) to \(outputPath)"
+        )
     }
 }
 #else

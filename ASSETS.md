@@ -36,6 +36,23 @@ The renderer reuses the original app icon and the same widget components that
 ship in the extension. It does not upscale a screenshot or contain captured
 user data.
 
+## Social preview
+
+`Assets/codex-pulse-social-preview.png` is a 1280 × 640 sRGB PNG for the
+repository's GitHub social media preview. It uses a solid dark background for
+predictable rendering across platforms and stays below GitHub's 1 MB upload
+limit.
+
+Regenerate it from the repository root with:
+
+```bash
+bash Scripts/render_social_preview.sh
+```
+
+The social preview uses the same original app icon, real SwiftUI widget
+components, and fixed synthetic `DEMO` snapshot as the README hero. It does
+not contain captured user data.
+
 ## Interface icons
 
 Runtime interface icons use Apple's SF Symbols through system APIs and are not
