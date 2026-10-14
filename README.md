@@ -177,6 +177,20 @@ not modify Codex data.
 ~/Library/Preferences/com.local.codex-pulse.plist
 ```
 
+## Engineering tour
+
+The data path is **read → merge → snapshot → display**. Local event statistics
+and account-side statistics remain separate because they have different scopes.
+
+- [LocalDataProvider](Sources/LocalDataProvider.swift): read-only local data and task activity.
+- [AppServerClient](Sources/AppServerClient.swift): account-side protocol integration.
+- [CodexDataStore](Sources/CodexDataStore.swift): state aggregation and refresh.
+- [WidgetSnapshotWriter](Sources/WidgetSnapshotWriter.swift): the compact widget snapshot.
+- [Regression tests](Tests/LocalDataProviderTests.swift): local data behavior.
+
+This documentation refresh was prepared on Windows; it does not establish a new
+macOS build or compatibility verification of the release binary.
+
 ## Contributing
 
 Issues and pull requests are welcome. Please include:

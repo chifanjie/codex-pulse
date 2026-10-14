@@ -162,6 +162,30 @@ codesign --verify --deep --strict --verbose=2 "build/Codex Pulse.app"
 ~/Library/Preferences/com.local.codex-pulse.plist
 ```
 
+## 工程导览
+
+```mermaid
+flowchart LR
+    A[本机会话 / SQLite] --> L[LocalDataProvider]
+    B[Codex App Server] --> C[AppServerClient]
+    L --> D[CodexDataStore]
+    C --> D
+    D --> S[WidgetSnapshotWriter]
+    S --> W[WidgetKit 小组件]
+```
+
+| 阅读入口 | 关注点 |
+| --- | --- |
+| [LocalDataProvider.swift](Sources/LocalDataProvider.swift) | 只读本地数据、事件合并与任务状态 |
+| [AppServerClient.swift](Sources/AppServerClient.swift) | 账户状态读取与协议适配 |
+| [CodexDataStore.swift](Sources/CodexDataStore.swift) | 状态整合与刷新 |
+| [WidgetSnapshotWriter.swift](Sources/WidgetSnapshotWriter.swift) | 输出小组件需要的精简快照 |
+| [LocalDataProviderTests.swift](Tests/LocalDataProviderTests.swift) | 数据处理回归测试 |
+
+项目把本地事件统计与账户侧统计分开处理，避免把不同时间范围的数据混为同一口径。浏览源码时可以沿“读取 → 合并 → 快照 → 展示”追踪一次更新。
+
+本次文档整理在 Windows 环境完成，未重新构建或验证 macOS 安装包；发行版本的支持范围与已知限制仍以下文为准。
+
 ## 参与贡献
 
 欢迎提交 Issue 和 Pull Request。请附上：
